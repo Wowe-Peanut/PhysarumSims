@@ -23,15 +23,20 @@ class Particle:
     def __init__(self, heading: list, position: list):
         self.heading = np.asarray(heading)
         self.pos = np.asarray(position)
-        self.sensors = []
+        self.sensors = (Particle.Sensor())
 
-    def step(self, size):
+    def step(self, map_size):
         self.pos = np.add(self.pos, STEP_SIZE*self.heading)
-        self.pos[0] = max(0, min(self.pos[0], size[0]-1))
-        self.pos[1] = max(0, min(self.pos[1], size[1]-1))
+        self.pos[0] = max(0, min(self.pos[0], map_size[0]-1))
+        self.pos[1] = max(0, min(self.pos[1], map_size[1]-1))
+
+        
             
     
     class Sensor:
+        heading = []
+        pos = []
+
         def __init__(self):
             pass
 
@@ -50,24 +55,10 @@ class MapData:
     #All particles sense ahead & turn accordingly
     def turn_particles(self):
         pass
-            
-
-
-
-    #Moves particles in direction of their heading
-    def move_particles(self):
-        for p in self.particles:
-            p.step(self.size)
-            
-    #Deposit new particle locations onto trail map
-    def deposit(self):
-        for p in self.particles:
-            self.trail_map[int(p.pos[0]), int(p.pos[1])] = DEPOSITION_AMOUNT
 
     #Defuse trail map w/ mean filter then decay cells based
     def defuse(self):
         new_map = np.zeros(self.size)
-
         #Defuse
         for r in range(self.size[0]):
             for c in range(self.size[1]):
@@ -79,16 +70,19 @@ class MapData:
                             count += 1
                 
                 new_map[r,c] /= count
-
-        
-        
         self.trail_map = new_map
-        
+    
     def tick(self):
-        #Steps are seperated to ensure all rules applied uniformly & instantanously, not one cell at a time
         self.turn_particles()
-        self.move_particles()
-        self.deposit()
+        
+        #Step
+        for p in self.particles:
+            p.step(self.size)
+
+        #Deposit
+        for p in self.particles:
+            self.trail_map[int(p.pos[0]), int(p.pos[1])] = DEPOSITION_AMOUNT
+
         self.defuse()
 
         #Decay
@@ -112,8 +106,7 @@ class MapData:
         
         
 
-
-    
+   
 def main():
     test = MapData((50,50))
     starting_particles = [Particle([math.cos(theta), math.sin(theta)],[random.randint(0,50),random.randint(0,50)]) for theta in [2*math.pi*random.random() for i in range(50)]]
