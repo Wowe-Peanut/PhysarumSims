@@ -7,10 +7,10 @@ import math
 
 SENSOR_DISTANCE = 1
 SENSOR_SIZE = 1
-SENSOR_ANGLE = None
+SENSOR_ANGLE = math.pi/4
 
 STEP_SIZE = 1
-ROTATION_ANGLE = None
+ROTATION_ANGLE = math.pi/4
 
 DEPOSITION_AMOUNT = 255
 DECAY_FACTOR = 0.9
@@ -23,23 +23,33 @@ class Particle:
     def __init__(self, heading: list, position: list):
         self.heading = np.asarray(heading)
         self.pos = np.asarray(position)
-        self.sensors = (Particle.Sensor())
+        self.set_sensor_positions()
 
     def step(self, map_size):
+        old_pos = self.pos.copy()
+
+        #Move along heading & bound to map size
         self.pos = np.add(self.pos, STEP_SIZE*self.heading)
         self.pos[0] = max(0, min(self.pos[0], map_size[0]-1))
         self.pos[1] = max(0, min(self.pos[1], map_size[1]-1))
 
-        
-            
-    
-    class Sensor:
-        heading = []
-        pos = []
+        #Move sensors along same heading but only for as far self.pos moved
+        deltaP = self.pos-old_pos
+        self.sensor_positions = [np.add(sensor, deltaP) for sensor in self.sensor_positions]
+               
+    def set_sensor_positions(self):
+        front = SENSOR_DISTANCE*self.heading
+        left = np.dot(front, self.get_rotation_matrix(-SENSOR_ANGLE))
+        right = np.dot(front, self.get_rotation_matrix(SENSOR_ANGLE))
+        self.sensor_positions = [left, front, right]
 
-        def __init__(self):
-            pass
+    def get_rotation_matrix(self, theta):
+        c, s = np.cos(theta), np.sin(theta)
+        return np.array(((c, -s),(s, c)))
 
+    def rotate(self, theta):
+        self.heading = np.dot(self.heading, self.get_rotation_matrix(theta))
+        self.set_sensor_positions()
 
 
 
@@ -54,7 +64,15 @@ class MapData:
 
     #All particles sense ahead & turn accordingly
     def turn_particles(self):
-        pass
+        for p in self.particles:
+            #Global sensor positions
+            gsps = [np.add(p.pos, s) for s in p.sensor_positions]
+            
+            #Sensor values
+            svals = [0 if not (0 <= round(gsp[0]) < self.size[0] and 0 <= round(gsp[1]) < self.size[1]) else self.trail_map[round(gsp[0]), round(gsp[1])] for gsp in gsps]
+
+            p.rotate((svals.index(max(svals))-1)*ROTATION_ANGLE)
+
 
     #Defuse trail map w/ mean filter then decay cells based
     def defuse(self):
@@ -87,6 +105,7 @@ class MapData:
 
         #Decay
         self.trail_map *= DECAY_FACTOR
+        self.trail_map[self.trail_map < 1] = 0
 
     #Returns a PIL Image object of the current trailmap 
     def snapshot(self) -> Image:
@@ -97,6 +116,7 @@ class MapData:
         self.particles = starting_particles
 
         for frame in range(fps*duration):
+            print(frame)
             for t in range(tpf):
                 self.tick()
             self.frames.append(self.snapshot())
@@ -108,11 +128,10 @@ class MapData:
 
    
 def main():
-    test = MapData((50,50))
-    starting_particles = [Particle([math.cos(theta), math.sin(theta)],[random.randint(0,50),random.randint(0,50)]) for theta in [2*math.pi*random.random() for i in range(50)]]
-    test.simulate(starting_particles, 10, 10, 1)
-    
-    
+    test = MapData((400,400))
+    starting_particles = [Particle([math.cos(theta), math.sin(theta)],[random.randint(0,100),random.randint(0, 100)]) for theta in [2*math.pi*random.random() for i in range(10000)]]
+    test.simulate(starting_particles, 5, 30, 1)
+
 
 if __name__ == '__main__':
     main()
